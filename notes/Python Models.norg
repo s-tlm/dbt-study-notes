@@ -1,0 +1,143 @@
+* Python Models
+  Python ("dbt-py") models are for use cases that can't be solved with SQL.
+  Python models behave just like any other DBT model, and you can use any 
+  open-source packages that are available in the Python ecosystem.
+
+  There is no need for additional infrastructure and orchestration to run these
+  models.
+
+** What are They?
+   Simply a function that reads in DBT sources or other models, applies
+   transformations and returns the transformed dataset.
+   DataFrame operations define all parts of the operations.
+
+   Unlike SQL, Python models return a DataFrame at the end of each model. Each
+   DataFrame operations is /lazily/ evaluated. Models have access to all the
+   same configurations as SQL models.
+
+** Defining a Python model
+   Each model exists as a `.py` file inside the `/models` folder.
+
+   Define a function `model` that accepts two input variables:
+   ~ `dbt` - A class compiled by DBT core and is unique to each model. Allows
+     you to run Python code using DBT context.
+   ~ `session` - Class representing connection to your Data Platform's Python
+     backend.
+
+   The model *must return a single DataFrame*.
+   If using Snowflake, this can be either a Pandas or Snowpark DataFrame.
+   If using PySpark, this can be a Spark, Pandas or Pandas-on-Spark DataFrame.
+
+   @code python
+   # models/my_python_model.py
+
+   import ...
+
+   def model(dbt, session):
+
+     # DataFrame representing an upstream model
+     upstream_model = dbt.ref("upstream_model")
+
+     # DataFrame representing an upstream source
+     upstream_src = dbt.source("upstream_source_name", "table_name")
+
+     final_df = ...  # Stuff you can't write in SQL!
+
+     return final_df
+   @end
+
+   All Python models can be reffed by downstream SQL models too.
+
+   @code sql
+   -- models/downstream_model.sql
+
+   with upstream_python_model as (
+      select * from {{ ref('my_python_model') }}
+   ),
+
+   ...
+   @end
+
+** Configuring Models
+   There are three ways to configure a Python model:
+   ~ `dbt_project.yml`.
+   ~ Dedicated `YAML` file in the `/models` directory.
+   ~ Within the model's `.py` file, using `dbt.config()` method.
+
+*** Using dbt.config()
+   @code python
+   # models/my_python_model.py
+
+   # Setting configuration
+   dbt.config(materialized="table")
+   @end
+
+   There's a limit on the options available through `dbt.config()`.
+   ~ Accepts only literal values (strings, booleans and numeric types).
+   ~ Can not pass functions or more complex data structures.
+
+   *For more complex configurations, use a `YAML` file.*
+
+*** Using YAML
+   @code yaml
+   # models/config.yml
+
+   version: 2
+  
+   models:
+    - name: my_python_model
+
+      # Document within the same codebase
+      description: My transformation written in Python
+
+      # Configure in ways that feel intuitive and familiar
+      config:
+        materialized: table
+        target_name: "{{ target.name }}"
+        specific_var: "{{ var('SPECIFIC_VAR') }}"
+        specific_env_var: "{{ env_var('SPECIFIC_ENV_VAR') }}"
+        tags: ['python']
+
+      # Test the results of my Python transformation
+      columns:
+        - name: id
+          # Standard validation for 'grain' of Python results
+          tests:
+            - unique
+            - not_null
+
+      tests:
+        # Write your own validation logic (in SQL) for Python results
+        - custom_generic_test
+    @end
+
+    You can access config values inside the Python model by using 
+    `dbt.config.get()`.
+
+    @code python
+    def model(dbt, session):
+      target_name = dbt.config.get("target_name")
+      specific_var = dbt.config.get("specific_var")
+      specific_env_var = dbt.config.get("specific_env_var")
+
+      orders_df = dbt.ref("fct_orders")
+
+      # limit data in dev
+      if target_name == "dev":
+        orders_df = orders_df.limit(500)
+
+      return orders_df
+    @end
+
+** Prerequisites
+   To use DBT Python models, you need an adapter to a data platform that fully
+   supports a Python runtime. Python models are *not* run locally. They are
+   executed remotely on the data platform.
+
+   Model definitions are local. Model execution is on the data platform. Just
+   like SQL.
+
+** Materializations
+   Only two types of materializations are supported:
+   ~ Table
+   ~ Incremental

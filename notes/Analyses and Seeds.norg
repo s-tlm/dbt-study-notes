@@ -1,0 +1,28 @@
+* Analyses and Seeds
+
+** Analyses
+   Analyses are SQL files that don't quite fit as a `model` inside the DBT
+   project. These files are more /analytical/ in nature can be version
+   controlled inside a DBT project using the `analysis` functionality.
+
+   Any SQL files stored in the `/analyses/` directory will be compiled, but *not
+   executed*. These files can use DBT functionality such as using
+   `{{ ref(...) }}` to select from other models.
+
+** Seeds
+   Seeds are CSV files in your DBT project. They are typically inside the
+   `/seeds/` directory. These files can be loaded into the data warehouse using
+   the `dbt seed` command. Seeds can also be built using the `dbt run` command.
+
+   Seeds can be referenced in downstream models like any other model using the
+   `ref` function.
+
+   Some good use-cases for seeds:
+   - A list of mappings of country codes to country names
+   - A list of test emails to exclude from analysis
+   - A list of employee account IDs
+
+   Some poor use-cases for seeds:
+   - Loading raw data that has been exported as CSVs
+   - Any kind of Production data containing sensitive information, such as PII
+     and passwords

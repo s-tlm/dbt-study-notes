@@ -1,0 +1,68 @@
+* Metrics
+  Aggregations over a table to support zero or more dimensions.
+  Examples:
+  - Number of active users.
+  - Monthly recurring revenue.
+
+  *Define them in `YAML` files* and they appear as nodes in the DAG.
+
+** Defining Metrics
+   Define them in `YAML` files nested under a `metrics` key.
+   They must:
+   - Contain only letters, numbers and underscores (no spaces or special characters).
+   - Begin with a letter.
+   - < 250 characters in length.
+
+   To give a metric a human-friendly name with title casing, spaces and special characters, use the `label` property.
+
+   *Note: Metrics can't be defined on ephemeral models. Materializations need to exist in the data warehouse.*
+
+   @code yaml
+   # models/marts/product/schema.yml
+
+   version: 2
+
+   models:
+    - name: dim_customers
+
+   metrics:
+    - name: rolling_new_customers
+      label: New Customers
+      model: ref('dim_customers')
+      description: "The 14 day rolling count of paying customers using the product"
+
+      calculation_method: count_distinct
+      expression: user_id
+
+      timestamp: signup_date
+      time_grains: [day, week, month, quarter, year]
+
+      dimensions:
+        - plan
+        - country
+
+      window:
+        count: 14
+        period: day
+
+      filters:
+        - field: is_paying
+          operator: 'is'
+          value: 'true'
+        - field: lifetime_value
+          operator: '>='
+          value: '100'
+        - field: company_name
+          operator: '!='
+          value: "'Acme, Inc'"
+        - field: signup_date
+          operator: '>='
+          value: "'2020-01-01'"
+    
+      # general properties
+      config:
+        enabled: true | false
+        treat_null_values_as_zero: true | false
+
+      meta: {team: Finance}
+   @end

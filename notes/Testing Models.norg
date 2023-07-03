@@ -1,0 +1,258 @@
+* Testing in DBT
+  DBT can run tests. Use the command `dbt test`.
+  Run tests in development before merging into Production.
+  Assertions continue to run after every refresh. This helps maintain data
+  quality.
+
+  Good tests are:
+  ~ Automated
+  ~ Fast
+  ~ Reliable
+  ~ Informative
+  ~ Focused
+
+** Types of Tests
+*** Tests for Deployments
+    @table
+    Type   | Commands                                                               | Description
+    - 
+    Good   | `dbt run` and `dbt test`                                               | All models will run, then tests.
+    LEAST OPTIMAL.
+    -
+    Better | `dbt test -s source:*` and `dbt run` and `dbt test --exclude source:*` | Test raw data sources first, 
+    then run all models, then run all tests excluding source tests.
+    SLIGHTLY MORE OPTIMAL.
+    -
+    Best   | `dbt build --fail-fast`                                                | Runs then tests objects as soon as they
+    become available. Will run everything the earliest possible time it can be ran.
+    MOST OPTIMAL.
+    @end
+
+    To run all tests:
+
+    @code bash
+    dbt test
+    @end
+
+    Run test on a specific model(s) using the `--select` flag.
+
+    @code bash
+    # Run tests on multiple models
+    dbt test --select <model1> <model2> ...
+    # Run tests on the intersection of models using comma
+    # Here, we run all tests on model1 that are of test type singular
+    dbt test --select <model1>, test_type:singular
+    @end
+
+    Run tests on models in a subfolder (ie. marts/core)
+
+    @code bash
+    dbt test --select marts.core.*
+    @end
+
+    Run tests only on sources
+
+    @code bash
+    # Run tests on all sources, or specifiy sources with source:<source_name>
+    dbt test --select source:*
+    @end
+
+*** Singular Tests
+    Specific tests that are applied to one or two data models. They assert specific
+    qualities that are unique to the model.
+
+    To run singular tests:
+
+    @code bash
+    dbt test --select <test_type>:singular
+    @end
+
+*** Generic
+    These are highly scalable tests. These tests are defined in `YAML` and can be
+    applied to all models.
+
+    DBT supports four types of generic tests:
+
+    ~ Unique
+    ~ Not null
+    ~ Accepted values
+    ~ Relationships
+
+    Additional test cases can be imported through packages **or** you can write
+    custom generic tests.
+
+    To run generic tests:
+
+    @code bash
+    dbt test --select <test_type>:generic
+    @end
+
+** Testing Data Sources
+   Tests can be run on our data sources. This ensures our raw data conforms to
+   our expectations.
+
+** Advanced Testing
+*** Testing Techniques
+    ~ Interactive/Adhoc Queries
+    ~ Saved Queries
+    ~ Expected Results: Count the number of errors.
+    ~ Test on a Schedule
+
+*** What to Test
+    ~ Test assertions against one data object.
+    -- Assertions
+    -- Contents of the data
+    -- Constraints of the data
+    -- The grain of the data
+    ~ Test how one database object refers to another database object
+    -- Compare values in one model to source of truth in another model
+    -- Ensure data hasn't been erroneously added or removed
+    ~ Testing uniqueness of your data
+    -- Tests for some unique business logic, edge case or rare event
+    ~ Test freshness of raw data
+    ~ Temporary testing while refactoring models
+    -- `audit_helper` package
+
+*** When to Test
+    ~ Test when adding or modifying code
+    ~ Test when deploying code into Production
+    ~ Test when opening a Pull Request (CI driven)
+    ~ Test in QA branch before code reached `main` branch
+
+*** Defining Tests
+    Generic tests are defined in `yaml` files and live alongside SQL files 
+    inside your project.
+
+    Specific tests live in the dedicated `tests` directory. They are in
+    dedicated SQL files that can be ran on a scheduled trigger.
+
+    Data freshness tests should be applied on your staging models only. Defined
+    in `yaml` files. Use freshness specific parameters.
+
+    Project tests are defined in `dbt_project.yaml` files alongside your global
+    project configurations. Tests whether you have defined tests and
+    documentation inside your project. Use the
+    {https://hub.getdbt.com/tnightengale/dbt_meta_testing/latest/}[DBT Meta Testing Package].
+
+*** Storing Test Failures in the Database
+    DBT will store test results in a table within the datawarehouse. This table
+    can then be queried during debugging.
+
+    A `SELECT` statement to the created table will be returned by DBT when
+    running the following command:
+
+    @code bash
+    dbt test --store-failures
+    @end
+
+    Test results will always replace the results from the previous test. This is
+    not designed to track test results over time.
+
+*** Custom Tests
+    We can write our own custom tests for DBT to execute against our models.
+    These are defined in `SQL` scripts and stored in our `/tests/` directory.
+
+    Both custom singular and generic tests can be written.
+
+**** Custom Singular Tests
+     Stored in the `/tests` directory.
+
+     Example:
+
+     @code sql
+     -- custom singular test
+     select
+     amount
+     from {{ ref('orders') }}
+     where amount <= 5
+     @end
+
+**** Custom Generic Tests
+     Stored in the `/tests/generic` directory.
+
+     Apply to models by defining the name of the generic test to run in the model
+     `YAML` file, similar to how a standard generic test is defined.
+
+     Example:
+
+     @code sql
+     -- custom generic test
+     {% test greater_than_five(model, column_name) %}
+
+     select
+     {{ column_name }}
+     from {{ model }}
+     where {{column_name }} <= 5
+
+     {% endtest %}
+     @end
+
+***** Overwriting Native Generic Tests
+      DBT in-built generic tests can be overwritten with custom logic if needed.
+      Simply define a custom generic test with the same name as the native test
+      and DBT will use it instead.
+
+*** Tests from Packages
+    There are three must have testing packages for any project:
+    ~ DBT Utils
+    ~ DBT Expectations
+    ~ DBT Audit Helper
+
+    {:jinja, macros and packages:*** Installing Packages}[Installing Packages].
+
+**** DBT Utils
+     Has a range of tests for a variety of common use cases.
+
+**** DBT Expectations
+     DBT implementation port of Great Expectations. Perform tests for data
+     quality.
+
+**** DBT Audit Helper
+     Tests to perform data audits. Great for comparing refactored or migrated
+     data models with original datasets. 
+
+*** Test Configurations
+    Configure how tests behave.
+    The following configurations are supported:
+    - Severity and theshold
+    - Where - filters the records the test is applied on
+    - Limit - limit the number of failed records returned
+    - Store failures - dbt stores the failed records in the warehouse
+    -- Schema - set the schema for storing failed records if store_failures is
+       enabled
+
+    Test configurations can be set in the following locations:
+    - YAML file where you configure generic tests
+
+    @code yaml
+    tests:
+      # config for a generic unique test
+      - unique:
+        config:
+          severity: warn
+    error_if: ">100"
+    warn_if: ">30"
+    @end
+
+    - Config blocks for singular tests
+
+    @code sql
+    -- config block is placed at the top of the singular test sql script
+    {{
+    config(
+    severity='warn'
+    )
+    }}
+    @end
+
+    - Generic test definitions in the `/macros` or `tests/generic` folders
+    - `dbt_project.yml` file for the project/package level
+
+    @code yaml
+    # Configure all tests in my_project to have severity warn and store failures
+    tests:
+    my_project:
+      +severity: warn
+    +store_failures: true
+    @end
+

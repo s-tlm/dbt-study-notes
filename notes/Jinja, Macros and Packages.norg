@@ -1,0 +1,161 @@
+* Jinja, Macros and Packages
+
+** Jinja
+   Jinja is a templating language written in Python. It can be used to write
+   functional SQL in DBT.
+
+*** Basics
+    Source: {https://jinja.palletsprojects.com/page/templates/}[Jinja Template Designer Documentation]
+
+    There are three delimiters in Jinja:
+
+    - \{% … %\} is used for statements. These are used to perform functional
+      programming such as setting variables and completing loops.
+    - \{\{ … \}\} is used for expressions. These will print text to the compile
+      file.
+    - \{# … #\} is used for comments. These will not be rendered. Use to
+      document code inline.
+
+    Jinja supports a few additional features.
+
+**** Variables
+     @code jinja
+     {% set foo = 'bar' %}
+    
+     {{ variable }}
+
+     'bar'
+     @end
+**** Dictionaries
+     @code jinja
+     {% set person = {
+     ‘name’: ‘me’,
+     ‘number’: 3
+     } %}
+
+     {{ person.name }}
+
+     me
+
+     {{ person[‘number’] }}
+
+     3
+     @end
+**** Lists
+     @code jinja
+     {% set self = [‘me’, ‘myself’] %}
+
+     {{ self[0] }}
+
+     me
+     @end
+**** If/Else Statements
+     @code jinja
+     {% set temperature = 80.0 %}
+
+     On a day like this, I especially like
+
+     {% if temperature > 70.0 %}
+
+     a refreshing mango sorbet.
+
+     {% else %}
+
+     A decadent chocolate ice cream.
+
+     {% endif %}
+
+     On a day like this, I especially like
+
+     a refreshing mango sorbet     
+     @end
+**** For Loops
+     @code jinja
+     {% set flavors = [‘chocolate’, ‘vanilla’, ‘strawberry’] %}
+
+     {% for flavor in flavors %}
+
+     Today I want {{ flavor }} ice cream!
+
+     {% endfor %}
+
+     Today I want chocolate ice cream!
+
+     Today I want vanilla ice cream!
+
+     Today I want strawberry ice cream!
+     @end
+**** Macros
+     @code jinja
+     {% macro hoyquiero(flavor, dessert = ‘ice cream’) %}
+
+     Today I want {{ flavor }} {{ dessert }}!
+
+     {% endmacro %}
+
+     {{ hoyquiero(flavor = ‘chocolate’) }}
+
+     Today I want chocolate ice cream!
+
+     {{ hoyquiero(mango, sorbet) }}
+
+     Today I want mango sorbet!
+     @end
+*** Whitespace Control
+    Control whitespace by adding a single dash on either side of the Jinja
+    delimiter. Whitespace will be trimmed wherever a delimiter is placed.
+
+** Macros
+   Generic logic can be stored inside a Macro. This logic can be used repeatedly
+   throughout a project.
+   Macros can be shared and used by any users. They can also be imported from
+   packages written by other developers.
+
+   It's important to consider whether its worth converting logic into a macro.
+   Although useful, it abstracts code outside of the script. It may make it more
+   difficult for readers to understand what certain pieces of code is doing.
+
+*** DRY Code vs Readability
+    It's tempting to re-write lines of SQL code as macros. However, this leads
+    to a model that is comprised with a lot of macros. This reduces the
+    readability of the code as code is now abstracted into separate macros.
+
+    There is a trade-off between limiting repeated code and how readable it is.
+
+*** Running Macros in Isolation
+    Code inside a macro can be run independently by using the `run-operation`
+    command.
+    @code bash
+    # Manually run a macro
+    dbt run-operation <macro name>
+    @end
+    Logging is useful to understand what is happening inside a macro.
+    *Best practice is to provide useful logs throughout your macros.*
+    @code bash
+    # Use Jinja logging template to output messages!
+    {{ log('Insert your logging messages here!', info=True) }}
+    @end
+** Packages
+   Packages allow you to import macros written by other developers into your
+   models.
+
+   Find packages at {https://hub.getdbt.com}[DBT Packages].
+
+*** Installing Packages
+    ~ Create a `packages.yml` in your project root directory.
+    ~ Find a package from {https://hub.getdbt.com}[DBT Packages].
+    ~ Paste the code into `packages.yml`.
+    ~ Run `dbt depts`.
+
+    The following syntax can be used to declare packages in `packages.yml`:
+    @code yaml
+    packages:
+    # Use a package from dbt hub
+    - package: fivetran/github
+    version: 0.7.0
+    # Clone directly from a repository
+    - git: git@github.com:fishtown_analytics/dbt-utils.git
+    version: 0.6.2
+    # Import local packages. Will install the dependencies declared in the prj
+    - local: sub-project
+    @end

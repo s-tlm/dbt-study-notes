@@ -1,0 +1,296 @@
+* Advanced Materialisations
+  Materialisations are ways that DBT can build your models.
+
+** Types of Materialisations
+   {https://docs.getdbt.com/docs/build/materializations}[DBT Materializations]
+
+   ~ Tables
+   ~ Views
+   ~ Ephemeral
+   -- Doesn't build anything. Creates a CTE and applies to downstream models.
+   ~ Incremental
+   -- Doesn't rebuild models completely. Only brings in records that are new.
+   ~  Snapshots
+   -- Looks for any records that have changed. If any have changed, bring in a
+      new row in the existing table.
+   -- Stored in their own directory.
+
+*** Tables
+    `models/creative_people.sql`
+
+    @code sql
+    select
+        id as person_id,
+        name,
+        favourite_colour
+    from raw_people
+    where is_creative = true
+    @end
+
+*** Views
+    `analytics.creative_people`
+
+    @code sql
+    select
+        id as person_id,
+        name,
+        favourite_colour
+    from raw_people
+    where is_creative = true
+    @end
+
+*** Ephemeral
+    Does not exist in the database. Instead, its a reusable code snippet that is
+    materialised as a CTE that can be `ref` in other models. DBT materialises
+    model as a transient/temporary table.
+
+    *If a previous model was a table or a view and is now ephemeral, DBT will ignore
+    those models.*
+
+*** Incremental
+    {https://discourse.getdbt.com/t/on-the-limits-of-incrementality/303}[On the Limits of Incrementality]
+
+    The simplest use-case is for capturing incoming data that is /immutable/ and
+    there are no late-arriving Facts.
+
+    Records are inserted or updated into a table based on the last time the model
+    was run.
+
+    Incremental mode will ask DBT to insert any new records that were created
+    since the last ingested date-time. *To capture new and updated records, a
+    unique key must be specified.* DBT will then insert new records *and* update
+    any records that were changed since the last run.
+
+**** Strategies
+     Incremental mode supports the following strategies:
+     ~ `delete+insert`
+     ~ `merge`
+     ~ `insert_overwrite`
+     ~ `append`
+
+     The optimal strategy depends on:
+     - the volume of data
+     - the reliability of the `unique_key`
+     - the features supported by the data platform
+
+     The strategy can be specified in specific models, or for all models in the
+     `dbt_project.yml` file.
+     The strategies available also depend on the data platform used.
+
+     @table
+     Data Platform Adapater | Default Strategy | Additional Supported Strategies
+     -
+     dbt-postgres           | append           | delete+insert
+     -
+     dbt-redshift           | append           | delete+insert
+     -
+     dbt-bigquery           | merge            | insert_overwrite
+     -
+     dbt-spark              | append           | merge(Delta only) insert_overwrite
+     -
+     dbt-databricks         | append           | merge(Delta only) insert_overwrite
+     -
+     dbt-snowflake          | merge            | append delete+insert
+     -
+     dbt-trino              | append           | merge delete+insert
+     @end
+
+**** Unique key (Optional)
+     Define a unique key if you want DBT to update records as well as append new
+     records. *Not specifying a unique key will result in append-only behaviour.*
+
+     This paramater can represent a single column or list of columns that
+     define the grain of the model. *These columns should not contain `NULL` values
+     or else the model can fail.* 
+
+     To ensure the unique key column is valid, use either:
+     - Manually handle all `NULLS` - `coalesce(<column_name>, 'value_if_null)`
+     - Define a surrogate key - `dbt_utils.generate_surrogate_key`
+
+    @code sql
+     {{ config(
+         materialized='incremental',
+         -- unique key is optional
+         -- can be a string or a list of strings
+         unique_key='user_id'
+       )
+     }}
+
+    select * from raw_app_data.events
+
+    {% if is_incremental() %}
+        -- this filter is applied only on an incremental run
+        where event_time > (select max(event_time) from {{ this }})
+    {% endif % }
+    @end
+
+**** Filtering Rows on an Incremental Run
+     DBT needs to know which rows to filter during an incremental load.
+     Wrap these rows inside the DBT `is_incremental()` macro.
+
+     @code sql
+     {{
+     config(materialized='incremental')
+     }}
+
+     select
+        *,
+        my_slow_function(my_column)
+     from raw_app_data.events
+
+     {% if is_incremental() %}
+
+     -- this filter will only be applied on an incremental run
+     where event_time > (select max(event_time) from {{ this }})
+
+     {% endif %}
+     @end
+
+     The macro will return `true` if the following conditions are met:
+     ~ Destination table already exists in the database
+     ~ dbt is not running in full refresh mode
+     ~ Running model is configured with `materialized='incremental'`
+
+**** Rebuilding an Incremental Model
+     If there is a model logic change, all rows in the model need to be updated.
+     DBT can perform a full refresh, which will rebuild the entire model from
+     scratch. The existing model will be dropped in the database, before being
+     rebuilt.
+
+     @code bash
+     dbt run --full-refresh --select my_incremental_model+
+     @end
+
+*** Snapshots
+    {https://docs.getdbt.com/docs/build/snapshots}[DBT Snapshots]
+
+    Implements SCD Type 2 tables.
+    Captures how records in a mutable table change over time.
+    *Snapshots are stored as `sql` scripts in the dedicated `/snapshots/` directory.*
+
+    @code sql
+    -- snapshots/orders.sql
+    {% snapshot orders_snapshot %}
+
+    {{
+        config(
+            target_database='analytics',
+            target_schema='snapshots',
+            unique_key='id',
+
+            strategy='timestamp',
+            updated_at='updated_at',
+        )
+    }}
+
+    select * from {{ source('jaffle_shop', 'orders') }}
+
+    {% endsnapshot %}
+    @end
+
+**** Running Snapshots
+     - *On the first run:* DBT creates an initial snapshot table. This is the
+       result set of the `select` statement with additional columns including
+       `dbt_valid_from` and `dbt_valid_to`. All records will have a
+       `dbt_valid_to = NULL`.
+     - *On subsequent runs:* DBT checks which records have changed or if any new
+       records were created:
+     -- `dbt_valid_to` column will be updated for any existing records that have
+        changed
+     -- The updated record and any new records will be inserted into the
+        snapshot table. New records will now have `dbt_valid_to = NULL`.
+
+     Snapshots can be referenced in downstream models like any other model via the
+     `ref` function.
+
+**** Detecting Changes
+***** Timestamp Strategy (Recommended)
+      Uses an `updated_at` attribute to determine whether a row has changed. If
+      the the existing `updated_at` column is older than the new record's, then
+      DBT will invalidate the old record and insert the new one. If the
+      timestamps are unchanged, then DBT will take no action.
+
+      @table
+      Config     | Description                                     | Example
+      -
+      updated_at | Represents when the source row was last updated | updated_at
+      @end
+
+      @code sql
+      {% snapshot orders_snapshot_timestamp %}
+
+      {{
+          config(
+            target_schema='snapshots',
+            strategy='timestamp',
+            unique_key='id',
+            updated_at='updated_at',
+          )
+      }}
+
+      select * from {{ source('jaffle_shop', 'orders') }}
+
+      {% endsnapshot %}
+      @end
+
+***** Check Strategy (No Reliable updated_at Column Available)
+      Useful if tables do not have a reliable `updated_at` attribute. This
+      strategy compares a list of columns between their current and historical
+      values. If any changes are detected, then the old record will be
+      invalidated and a new record inserted. No action is taken if both values
+      are identical.
+
+      @table
+      Config     | Description                                                           | Example
+      -
+      check_cols | A list of columns to check for changes, or `all` to check all columns | `['name', 'email']`
+      @end
+
+      @code sql
+      {% snapshot orders_snapshot_check %}
+
+      {{
+          config(
+            target_schema='snapshots',
+            strategy='check',
+            unique_key='id',
+            check_cols=['status', 'is_cancelled'],
+          )
+      }}
+
+      select * from {{ source('jaffle_shop', 'orders') }}
+
+      {% endsnapshot %}
+      @end
+
+***** Hard-Deletes (Opt-In)
+      Rows that are deleted are not invalidated by default.
+      DBT can track rows that no longer exist with the `invalidate_hard_deletes` option.
+
+      This configuration works with the `timestamp` snapshot strategy. The configured 
+      `updated_at` column must be of type `timestamp`.
+
+      @code sql
+      {% snapshot orders_snapshot_hard_delete %}
+
+      {{
+          config(
+            target_schema='snapshots',
+            strategy='timestamp',
+            unique_key='id',
+            updated_at='updated_at',
+            invalidate_hard_deletes=True,
+          )
+      }}
+
+      select * from {{ source('jaffle_shop', 'orders') }}
+
+      {% endsnapshot %}
+      @end
+
+** Tactics to Decide Which Type to Use
+   DBT recommends the following:
+
+   ~ Start with a `view`.
+   ~ When it takes too long to query, switch to `table`.
+   ~ When it takes too long to build, switch to `incremental`. 

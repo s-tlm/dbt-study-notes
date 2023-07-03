@@ -1,0 +1,111 @@
+* Advanced Deployment with DBT
+** Environments
+   The following can be configured in each environment:
+   - DBT version
+   - Git branch
+   - Data location
+
+   DBT Cloud provides two environments:
+   ~ Development
+     All developers have access to *one* development environment per DBT project.
+     Everyone has the same DBT version, but can use their own Git branches and
+     deploy in their own schemas.
+   ~ Deployment
+     Usually set to deploy from the `main` branch and deploys into a Production
+     schema.
+
+** Jobs
+   A job is a sequence of DBT commands:
+   ~ `dbt run`
+   ~ `dbt test`
+   ~ `dbt build`
+
+   Jobs can be scheduled to run automatically at certain times:
+   - Weekly full load
+     `dbt build --full-refresh`
+   - Daily incremental load
+     `dbt build`
+
+   Some common deployment jobs are:
+   - *Standard job*
+     Typically just a DBT build command and will rebuild the entire DAG
+     including any incremental logic.
+   - *Full refresh job*
+     A DBT build command with the full refresh flag. This will drop all
+     incremental models and materialize all models from scratch.
+   - *Time sensitive job*
+     Some jobs may need to be updated more frequently than others. These models
+     should be specifically set on more frequent job schedules.
+   - *Fresh rebuild job*
+     Only rebuild downstream models from sources that have been updated since
+     the previous run.
+
+** Deployment Architecture
+   The way automatic executions are organised.
+   There are two common workflows:
+   ~ One Trunk/Direct Promotion
+   ~ Many Trunk/Indirect Promotion
+
+*** One Trunk Promotion
+    Trunk-based development. 
+    Features are developed in their own branch. Once ready, these features are
+    merged back into the main branch via a PR. This feature will be included in
+    the next scheduled Production deployment. Changes are immediately reflected
+    after they're merged.
+
+    Risks include merging bad code straight into Production, that then gets
+    deployed.
+
+*** Many Trunk Promotion
+    Git Flow/Release Flow branching strategy.
+    Several branches are used for development, testing and QA. QA/UAT branch is 
+    merged into Main after testing.
+
+** Job Structures
+*** One-off Jobs vs Unified Jobs
+    Avoid building the same models more than once to reduce the computational
+    workload and avoid repeated builds.
+
+    DBT recommends to start with incremental jobs, /then/ determine which models
+    need to be built. Some common strategies to tell DBT when to run jobs are:
+    ~ Tags - Tag jobs with their build frequency. DBT can then run the jobs
+      based on their tags.
+    ~ Exposures - Build out models only based on what a specific dashboard uses.
+    ~ Sources - Build out all models that are dependent on a source if that
+      source is updated frequently.
+    ~ Folder structure - Build models based on the folder structure, for
+      example: Build all models in the Finance folder.
+
+    Avoid running multiple DAGs in multiple jobs as DBT will not consider the
+    shared models between them and there will be a lot of repeated compute. By
+    running models together, we can make use of /unions/ and /intersections/.
+
+**** Unions
+     Build the union of two models.
+
+     @code bash
+     dbt build --select +model1 +model2
+     @end
+
+**** Intersections
+     Build only the shared intersection between two models.
+
+     @code bash
+     dbt build --select +model1,+model2
+     @end
+
+** Orchestration
+   Orchestration refers to how and when jobs are triggered.
+   There are three ways to orchestrate jobs:
+   ~ Scheduled
+   ~ Webhooks
+   ~ DBT Cloud API
+     This requires an API token that is scoped to your account or a service
+     token.
+     API can also be accessed with the `dbt-cloud-cli` tool.
+
+*** Cron Schedules
+    {https://docs.getdbt.com/docs/deploy/job-triggers#custom-cron-schedule}[Cron Schedules]
+    Use cron schedules to specify specific time schedules. Jobs can be specified
+    down to the minute, hour, day of the month, month and day of the week.
+    Tools like {crontab.guru}[crontab.guru] can help with creating schedules.

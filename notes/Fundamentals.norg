@@ -1,0 +1,315 @@
+* DBT Fundamentals
+** Traditional Data Teams
+   Traditionally, /Data Engineers/ are responsible for maintaining data
+   infrastructure and the ETL process for creating tables and views.
+   /Data Analysts/ focus on querying the tables and views to generate business
+   insights for stakeholders.
+
+** Extract, Transform, Load or Extract, Load, Transform
+   ETL describes the process where raw data is first extracted from multiple
+   sources, transformed on a local or external machine then loaded into the data
+   warehouse.
+   ELT is a more recent process where database objects are created by first
+   extracting raw data from multiple sources, loading it in its raw state into
+   the data warehouse then transforming it directly inside the data warehouse.
+   ELT is made possible by the introduction of cloud-based data warehouse
+   technologies.
+
+** Analytics Engineering
+   This role focuses on the transformation of raw data into a state that's ready
+   for analysis.
+   This new role fits in between the roles of /Data Engineers/
+   and /Data Analysts/.
+
+** Models
+   Models are `sql` files that live in the `/models` folder.
+   They are designed to be simple select statements, there is no DDL/DML logic
+   that needs to be written around them.
+   Models are executed by DBT using the `dbt run` command. This command
+   materialises the model inside the data warehouse.
+
+*** Materialisations
+    Each model materialisation can be configured using config blocks at the top
+    of each file:
+    @code sql
+    -- Materialise as a table
+    {{ config(
+    materialized='table'
+    ) }}
+    -- Materialise as a view
+    {{ config(
+    materialized='view'
+    ) }}
+    @end
+    Running `dbt run` will automatically wrap the select statement in the
+    correct DDL/DML to construct the model as a table/view. If the model already
+    exists in the data warehouse, DBT will drop it and recreate the model. 
+
+*** Model Modularity
+    Models refer to other models using the `ref` function. This allows models to
+    be modular.
+    The `ref` function builds dependencies between models and points to the name
+    of a particular model, instead of the schema and table name of the object.
+    @code sql
+    -- Example
+    {{ ref('stg_customers') }}
+    -- compiles to:
+    analytics.dbt_slam.stg_customers
+    @end
+    DBT also builds a lineage graph to depict model dependencies. DBT determines
+    model dependencies and builds models in the appropriate order.
+
+*** Model Configuration
+    Model properties can be configured in `YAML` files inside the `/models` folder.
+
+    @code yaml
+    ---
+    version: 2
+
+    models:
+      - name: <model name>
+        description: My model description.
+        docs:
+          show: true | false
+        latest_version: <version_identifier>
+        access: private | protected | public
+        config:
+          <model_config>: <config_value>
+        constraints:
+          - <constraint1>
+          - <constraint2>
+        tests:
+          - <test1>
+          - <test2>
+        columns:
+          - name: <column_name>
+            description: My column description
+            meta: <some_metadata>
+            quote: true | false
+            constraints:
+              - <constraint1>
+            tests:
+              - <test1>
+            tags: A tag. 
+    @end
+
+** Naming Conventions
+   @table
+   Type         | Convention | Description
+   -
+   Sources      | src        | Raw tables that are loaded into the data warehouse.
+   -
+   Staging      | stg        | Models built directly on source tables.
+   One-to-one relationship with source tables and feature light transformations.
+   Used to clean and standardise data before heavier transformations downstream.
+   -
+   Intermediate | int        | Any models that exist between staging and the
+   final fact and dimension tables. These are built directly on staging tables
+   rather than source tables.
+   -
+   Fact         | fct        | Represents a business event that has occured or
+   is occurring. Examples are: sessions, transactions, orders, stories and votes.
+   -
+   Dimension    | dim        | Represents attributes relating to a person,
+   place or thing. Examples are: customers, products, candidates, buildings and
+   employees.
+   @end
+
+** Organising Project Directory
+*** Configuration
+    Every project needs a `dbt_project.yaml`. This is how DBT knows the directory
+    is a DBT project. It also contains important information that tells DBT how
+    to operate on your project.
+
+    A list of all the possible configurations for a `dbt_project.yaml` file:
+    @code yaml
+    ---
+    name: project_name
+    # user defined version string
+    version: version_number_string
+    config-version: 2
+
+    # configure the profile dbt uses for this project
+    # profiles are from ~/.dbt/profiles.yml
+    profile: profile_name
+
+    model-paths: [directorypath]
+    seed-paths: [directorypath]
+    test-paths: [directorypath]
+    analysis-paths: [directorypath]
+    macro-paths: [directorypath]
+    snapshot-paths: [directorypath]
+    docs-paths: [directorypath]
+    asset-paths: [directorypath]
+    target-path: directorypath
+
+    log-path: directorypath
+    packages-install-path: directorypath
+
+    clean-targets: [directorypath]
+
+    query-comment: string
+
+    require-dbt-version: version-range | [version-range]
+
+    quoting:
+      database: true | false
+      schema: true | false
+      identifier: true | false
+
+    models:
+      <model_config>
+    seeds:
+      <seed_config>
+    snapshots:
+      <snapshot_config>
+    sources:
+      <sources_config>
+    tests:
+      <tests_config>
+    vars:
+      <variables>
+
+    on-run-start: sql-statement | [sql-statement]
+    on-run-end: sql-statement | [sql-statement]
+
+    dispatch:
+      - macro_namespace: packagename
+        search_order: [packagename]
+    @end
+*** Run Command
+
+    A `dbt run` command will build every model currently inside the `/models`
+    directory. Models can be organised in sub-folders, so that only specific
+    folders can be ran as the team sees fit.
+    @code bash
+    # Example, run only models inside models/staging
+    $ dbt run --select staging
+    @end
+*** Example Project Structure
+    *Marts*: All intermediate, fact and dimension models can be stored here.
+    Further sub-folders can be created in here to seperate data by their
+    business function; finance, sales, marketing.
+    *Staging*: All staging and source models can be stored here. Futher
+    sub-folders can be used to seperate data by their data source; Stripe,
+    Salesforce.
+
+** Sources
+   Sources are the raw datasets that get loaded into the data warehouse. It is
+   easiest to set up sources in DBT that can then be referred to in downstream
+   models. This allows the following:
+   - Multiple source tables can be configured in one place.
+   - Sources are easily identified as green nodes in a lineage graph.
+   - The freshness of source tables can be checked with `dbt source freshness`.
+
+*** Configuring Sources
+    Sources are configured in `YAML` files inside the `/models` directory.
+
+**** Source Freshness
+     Source freshness can be configured in the YAML file. For each source
+     table, the `loaded_at_field` attribute must be configured.
+
+     You can set thresholds for triggering a warning or error with `warn_after`
+     and `error_after`.
+
+     Use `dbt source freshness` for DBT to determine the source freshness.
+    @code yaml
+    # Example source.yaml
+    version: 2
+
+    sources:
+      - name: jaffle_shop
+        database: raw
+        schema: jaffle_shop
+        tables:
+          # customers table source with freshness configured
+          - name: customers
+            loaded_at_field: sys_eff_fr_ts
+            freshness:
+              warn_after: {count: 12, period: hour}
+              error_after: {count: 24, period: hour}
+          - name: orders
+    @end
+*** Source Function
+    The `source` function is used to build dependencies between models and sources.
+    @code sql
+    -- Use customers source table configured above.
+    select * from {{ source('jaffle_shop', 'customers') }}
+    @end
+** Tests
+   Tests allow us to ensure our SQL code does what we intended it to do.
+   In DBT, tests are written as `select` statements. These statements are ran
+   against materialized models to check whether assertions are met.
+
+*** Types of Tests 
+    DBT supports two types of tests:
+    ~ Generic - written in `YAML`. Returns the number of records that don't
+      meet your assertion.
+    ~ Singular - specific queries that are run against your models. Executed
+      on the entire model.
+
+    DBT has four built-in tests:
+    ~ Unique
+    ~ Not null
+    ~ Accepted values
+    ~ Relationships
+
+*** Running Tests
+    DBT tests can be run using the following commands:
+    ~ `dbt test`
+    ~ `dbt test --select test_type:generic`
+    ~ `dbt test --select test_type:singular`
+    ~ `dbt test --select one_specific_model`
+
+** Documentation
+   Documentation should be kept as up-to-date as possible so that teams have
+   access to the information they need to support their tasks.
+
+   In DBT, models are automatically documented. Documentation can be configured and added to 
+   from the `YAML` that live inside the `/models` folder.
+
+   DBT automatically documents any textual descriptions that are written by the developer.
+   Descriptions can be written for:
+   - Sources
+   - Models
+   - Columns
+
+*** Docs Blocks
+    In certain cases, the documentation automatically created by DBT may not be enough.
+    DBT allows you to write your own documentation in Markdown to include in the auto-generated docs.
+    They must be uniquely named and can consist of Markdown.
+
+    A docs block example:
+    @code markdown
+    {% docs table_events %}
+
+    This table contains clickstream events from the marketing website.
+
+    The events in this table are recorded by [Snowplow](http://github.com/snowplow/snowplow) and piped into the warehouse on an hourly basis.
+
+    The following pages of the marketing site are tracked:
+    - /
+    - /about
+    - /team
+    - /contact-us
+
+    {% enddocs %}
+    @end
+    It can then be used by referencing it in the `YAMl` file:
+    @code yaml
+    version: 2
+
+    models:
+      - name: events
+        description: '{{ doc("table_events") }}'
+
+        columns:
+          - name: event_id
+            description: This is a unique identifier for the event
+            tests:
+              - unique
+              - not_null
+    @end
+    *** Generating Documentation
+        Documentation can be generated by running the `dbt docs generate` command.
+        Documentation can be served by running the `dbt docs serve` command.
