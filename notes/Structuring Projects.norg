@@ -1,56 +1,161 @@
 * Structuring Projects
   {https://docs.getdbt.com/guides/best-practices/how-we-structure/1-guide-overview}[DBT Guide to Structuring Projects]
 
-  Below are the best-practices for structuring an analytics project as proposed by DBT.
-  In essence, it is recommended to structure a project so that data elements have a clear flow.
-  Doing so allows users to easily navigate data elements from raw source all the way to becoming business-conformed
-  and ready for consumption.
+  Below are the best-practices for structuring an analytics project as proposed
+  by DBT.
+  In essence, it is recommended to structure a project so that data elements 
+  have a clear flow.
+  Doing so allows users to easily navigate data elements from raw source all 
+  the way to becoming business-conformed and ready for consumption.
 
 ** Staging
    This is where data usually begins its journey.
 
-   - *Folders*. Folder structure is very important. Having a consistent folder structure helps users
-     navigate the codebase. Folder structure is also used to interface with DBT via the {:general commands:** node selection syntax}[Node Selection syntax].
-   -- *Subdirectories based on the source system*. This is the recommended approach from DBT. Staging files
-      should be grouped by the source system they relate to as tables would share similar properties and loading
+   - *Folders*. Folder structure is very important. Having a consistent folder 
+     structure helps users navigate the codebase. Folder structure is also used
+     to interface with DBT via the {:general commands:** node selection syntax}[Node Selection syntax].
+   -- *Subdirectories based on the source system*. This is the recommended 
+      approach from DBT. Staging files should be grouped by the source system 
+      they relate to as tables would share similar properties and loading
       methods.
-   - *File Names*. Having a consistent naming pattern is crucial in DBT. Files must be unique and correspond to the
-     model when selected and created in the data warehouse. DBT recommends to clearly place as much information
-     into file names as possible.
+   - *File Names*. Having a consistent naming pattern is crucial in DBT. Files 
+     must be unique and correspond to the model when selected and created in the
+     data warehouse. DBT recommends to clearly place as much information into 
+     file names as possible.
 
    Suggested naming convention:
-   - `stg_<source>__<entity>s.sql`: the double underscore helps visualise seperate components in the file name.
-     File names are also *plural*.
+   - `stg_<source>__<entity>s.sql`: the double underscore helps visualise seperate 
+     components in the file name. 
+   - File names should be *plural* to aid readability.
 
 *** Models
-    Models created in the staging layer should only have standard transformations applied. These should only be
-    applied on raw datasets from source.
+    Models created in the staging layer should only have standard
+    transformations applied. These should only be applied on raw datasets from 
+    source.
     Examples of acceptable transformations:
     ~ Renaming
     ~ Type casting
     ~ Basic computations
-    ~ Categorizing (using conditional logic to group values into buckets or booleans)
+    ~ Categorizing (using conditional logic to group values into buckets or 
+      booleans)
 
-    *Staging models should also be materialized as views*. This is because they're not intended to be used as
-    artifacts themselves. Typically, this provides the following benefits:
-    - Any downstream models referencing staging models will always get the freshest data possible.
-    - Avoids wasting space in the data warehouse that are not intended to be queried by consumers.
+    *Staging models should also be materialized as views*. This is because they're
+    not intended to be used as artifacts themselves. Typically, this provides 
+    the following benefits:
+    - Any downstream models referencing staging models will always get the 
+      freshest data possible.
+    - Avoids wasting space in the data warehouse that are not intended to be
+      queried by consumers.
 
-    *Staging models are the only place we'll use the `source` macro*. Our staging models should have a 1-to-1
-    relationship with our source tables. For each source table, there should be an equivalent staging model.
+    *Staging models are the only place we'll use the `source` macro*. Our staging 
+    models should have a 1-to-1 relationship with our source tables. For each 
+    source table, there should be an equivalent staging model.
 
-    *The DBT Codegen package can be used to automate the creation of staging models.*
+    *The DBT Codegen package can be used to automate the creation of staging 
+    models.*
     {https://github.com/dbt-labs/dbt-codegen}[DBT Codegen]
 
 ** Intermediate
-   After staging, the Intermediate layer is where we begin to various models together.
+   After staging, the Intermediate layer is where we begin to various models
+   together.
 
-   - *Folders*. Structured according to business groupings. Examples: Finance, Marketing, Sales etc.
+   - *Folders*:
+   -- Structured according to business groupings. Examples: Finance, Marketing,
+      Sales etc.
+   - *File names*:
+   -- `int_<entity>s_<verb>s.sql`: Think of transformations as verbs. These make 
+      the exact transformations the model represents easy to understand.
 
-   Suggested naming convention:
-   - `int_<entity>s_<verb>s.sql`: Think of transformations as verbs. These make the exact transformations the
-     model represents easy to understand.
+   Intermediate models are *not* exposted to end users. They shouldn't be part of
+   the main `production` schema as they're not intended for consumption in 
+   dashboards or applications.
+   They should also be *materialized ephemerally* (preferred option). If needed,
+   they can also be materiazlied as *views* inside a custom schema with special
+   permissions, outside of the `production` schema.
+
+*** Common Use Cases for Intermediate Models
+    ~ Structural simplification - Join typically 4-6 models to generate a mart.
+    ~ Re-graining - Fan out or collapse models to the appropriate grain ahead of
+      bringing them into the mart. Keeps the mart tidy.
+    ~ Isolating complex operations - Helpful to keep complex transformations
+      inside the intermediate layer. Helps simplify later models and keeps our
+      code DRY.
 
 ** Marts
+   This is where we begin to arrange our models by their business purpose and 
+   definitions. Unlike traditional Kimball Star Schema, we freely bring in any
+   data that is relevant to the questions we're aiming to build answers for.
+   Repeated data is okay, as data storage is cheap in today's world.
+
+   ~ Group by department or area of concern - Don't optimise too early. Keep 
+     folder structure simple.
+   ~ Name by entity - Use plain English for file naming.
+   ~ *Do not build the same concept differently for different teams* - Do not
+     have `finance_orders` and `marketing_orders`. This is an anti-pattern.
+     Create models based on their /concept/, ie. `tax_revenue` is a different
+     concept to `revenue`. `finance_revenue` and `marketing_revenue` is an
+     anti-pattern.
+
+*** Example Layout
+    @code text
+    models/marts
+    ├── finance
+    │   ├── _finance__models.yml
+    │   ├── orders.sql
+    │   └── payments.sql
+    └── marketing
+    ├── _marketing__models.yml
+    └── customers.sql
+    @end
+
+    Models here are *materialized as tables or incremental models*. Provides
+    users with faster query times for downstream models. Best practice is to
+    always start with a view, then once runtime becomes too high, transition to
+    an incremental model.
+
+    Okay to have wide and denormalized tables. Kimball way.
+
+    Don't have too many joins in one mart. If models become too complex, aim to
+    modularise.
 
 ** Rest of the Project
+*** Example Layout
+    @code text
+    models
+    ├── intermediate
+    │   └── finance
+    │       ├── _int_finance__models.yml
+    │       └── int_payments_pivoted_to_orders.sql
+    ├── marts
+    │   ├── finance
+    │   │   ├── _finance__models.yml
+    │   │   ├── orders.sql
+    │   │   └── payments.sql
+    │   └── marketing
+    │       ├── _marketing__models.yml
+    │       └── customers.sql
+    ├── staging
+    │   ├── jaffle_shop
+    │   │   ├── _jaffle_shop__docs.md
+    │   │   ├── _jaffle_shop__models.yml
+    │   │   ├── _jaffle_shop__sources.yml
+    │   │   ├── base
+    │   │   │   ├── base_jaffle_shop__customers.sql
+    │   │   │   └── base_jaffle_shop__deleted_customers.sql
+    │   │   ├── stg_jaffle_shop__customers.sql
+    │   │   └── stg_jaffle_shop__orders.sql
+    │   └── stripe
+    │       ├── _stripe__models.yml
+    │       ├── _stripe__sources.yml
+    │       └── stg_stripe__payments.sql
+    └── utilities
+    └── all_dates.sql
+    @end
+
+*** Best Practice:
+**** Do
+    ~ Config per folder
+    ~ Cascade configs
+
+**** Don't Do
+     ~ Config per project - Makes it too complex and cumbersome to work with.
