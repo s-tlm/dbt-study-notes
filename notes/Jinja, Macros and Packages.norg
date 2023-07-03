@@ -26,6 +26,7 @@
 
      'bar'
      @end
+
 **** Dictionaries
      @code jinja
      {% set person = {
@@ -41,6 +42,7 @@
 
      3
      @end
+
 **** Lists
      @code jinja
      {% set self = [‘me’, ‘myself’] %}
@@ -49,6 +51,7 @@
 
      me
      @end
+
 **** If/Else Statements
      @code jinja
      {% set temperature = 80.0 %}
@@ -69,6 +72,7 @@
 
      a refreshing mango sorbet     
      @end
+
 **** For Loops
      @code jinja
      {% set flavors = [‘chocolate’, ‘vanilla’, ‘strawberry’] %}
@@ -85,6 +89,7 @@
 
      Today I want strawberry ice cream!
      @end
+
 **** Macros
      @code jinja
      {% macro hoyquiero(flavor, dessert = ‘ice cream’) %}
@@ -101,6 +106,7 @@
 
      Today I want mango sorbet!
      @end
+
 *** Whitespace Control
     Control whitespace by adding a single dash on either side of the Jinja
     delimiter. Whitespace will be trimmed wherever a delimiter is placed.
@@ -125,16 +131,20 @@
 *** Running Macros in Isolation
     Code inside a macro can be run independently by using the `run-operation`
     command.
+
     @code bash
     # Manually run a macro
     dbt run-operation <macro name>
     @end
+
     Logging is useful to understand what is happening inside a macro.
     *Best practice is to provide useful logs throughout your macros.*
+
     @code bash
     # Use Jinja logging template to output messages!
     {{ log('Insert your logging messages here!', info=True) }}
     @end
+
 ** Packages
    Packages allow you to import macros written by other developers into your
    models.
@@ -148,6 +158,7 @@
     ~ Run `dbt depts`.
 
     The following syntax can be used to declare packages in `packages.yml`:
+
     @code yaml
     packages:
     # Use a package from dbt hub
