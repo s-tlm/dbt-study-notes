@@ -1,0 +1,19 @@
+* Project Variables
+  DBT allows you to configure variables for use throughout the project.
+  Some sample use-cases include:
+  - Storing timezones
+  - Avoiding hard-coded table names
+  - Storing commonly used values
+
+  Variables can be used in models, hooks or macros.
+  Simply use the `{{ var('') }}` function.
+
+** Variable Precedence
+   Variable precedence depends on where the variable was first set.
+   The order of precedence is as follows:
+   ~ Variables defined in the command-line.
+   ~ Package-scoped variable declaration in the root `dbt_project.yml`.
+   ~ Global variable declarations in the root `dbt_project.yml`.
+   ~ Variable's default argument if it exists.
+
+   *An error is raised if no value is found after checking these four locations.*
