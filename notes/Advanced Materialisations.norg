@@ -40,12 +40,12 @@
     @end
 
 *** Ephemeral
-    Does not exist in the database. Instead, its a reusable code snippet that is
-    materialised as a CTE that can be `ref` in other models. DBT materialises
+    Does not exist in the database. Instead, its a reusable code snippet that 
+    is materialised as a CTE that can be `ref` in other models. DBT materialises
     model as a transient/temporary table.
 
-    *If a previous model was a table or a view and is now ephemeral, DBT will ignore
-    those models.*
+    *If a previous model was a table or a view and is now ephemeral, DBT will 
+    ignore those models.*
 
 *** Incremental
     {https://discourse.getdbt.com/t/on-the-limits-of-incrementality/303}[On the Limits of Incrementality]
@@ -53,8 +53,8 @@
     The simplest use-case is for capturing incoming data that is /immutable/ and
     there are no late-arriving Facts.
 
-    Records are inserted or updated into a table based on the last time the model
-    was run.
+    Records are inserted or updated into a table based on the last time the 
+    model was run. *Tables must already exist in the data warehouse.*
 
     Incremental mode will ask DBT to insert any new records that were created
     since the last ingested date-time. *To capture new and updated records, a
