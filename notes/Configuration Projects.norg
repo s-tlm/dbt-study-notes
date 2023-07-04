@@ -112,3 +112,27 @@
    - `dbt docs generate`
 
    These hooks can also be used to call macros that return SQL statements.
+
+** Quoting
+    @code yaml
+    ---
+    # dbt_project.yml
+    quoting:
+      database: true | false
+      schema: true | false
+      identifier: true | false
+      project: true | false
+    @end
+  
+   DBT will quote the following identifiers when creating tables/views or
+   resolving `ref` functions:
+    - Database
+    - Schema
+    - Identifier
+  
+      For most adapters, quoting is set to `true` by default.
+      *For Snowflake, quoting is set to `false`.* In Snowflake, all unquoted
+      identifiers use UPPER CASE. Therefore, if a model is quoted
+      in lower-case, then they can not be selected without using quotes.
+
+      *For Snowflake, its recommended to leave quoting OFF!*
