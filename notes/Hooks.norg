@@ -1,0 +1,24 @@
+* Hooks
+  Hooks allow you to execute additional SQL at certain points during DBT
+  execution.
+
+  - `pre-hook`: executed /before/ a model, seed or snapshot is built
+  - `post-hook`: executed /after/ a model, seed or snapshot is built
+  - `on-run-start`: executed at the /start/ of `dbt run`, `dbt test`, `dbt seed` or 
+    `dbt snapshot`
+  - `on-run-end`: executed at the /end/ of `dbt run`, `dbt test`, `dbt seed` or
+    `dbt snapshot`
+
+** Example
+   Configure a post-hook after running a certain DBT model.
+
+   @code sql
+   -- models/my_mode.sql
+   {{ config(
+        post_hook=[
+          "alter table {{ this }} ..."
+        ]
+      )
+   }}
+   @end
+
