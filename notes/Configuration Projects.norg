@@ -136,3 +136,26 @@
       in lower-case, then they can not be selected without using quotes.
 
       *For Snowflake, its recommended to leave quoting OFF!*
+
+** Dispatch
+   {:Multiple Dispatch:}[Notes on multiple dispatch].
+
+   DBT uses {https://en.wikipedia.org/wiki/Multiple_dispatch}[multiple dispatch] to execute code correctly based on the data 
+   platform. We can override the default search locations for macros in certain
+   namespaces.
+  
+   By default, DBT will look inside the `root` project and then look for
+   implementations in the package named by `macro_namespace`.
+
+*** Example
+    Say we implemented a custom macro from `dbt_utils` in the `root` project and 
+    want our version to take precedence. If a custom implementation isn't
+    available, we want DBT to fallback on the default implementation.
+
+    @code yaml
+    ---
+    # This is default behaviour
+    dispatch:
+      - macro_namespace: dbt_utils
+        search_order: ['my_root_project', 'dbt_utils']
+    @end

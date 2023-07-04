@@ -1,0 +1,22 @@
+* How DBT Handles Multiple Dispatch
+  DBT uses multiple dispatch to correctly execute code based on the data
+  platform adapter used.
+
+  The following are used to select the correct implementation:
+  ~ Adapter prefix
+  ~ Package namespace
+
+** Adapter Prefix
+   The following adapters are supported. If no match, DBT defaults to the /default/
+   implementation.
+
+   - Postgres: `postgres__my_macro`
+   - Redshift: `redshift__my_macro`
+   - Snowflake: `snowflake__my_macro`
+   - BigQuery: `bigquery__my_macro`
+   - OtherAdapter: `otheradapter__my_macro`
+   - /default/: `default__my_macro`
+
+** Package Namespace
+   If the macro namespace is provided, DBT will search inside the package
+   namespace for the correct implementation instead.
