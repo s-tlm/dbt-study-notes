@@ -159,3 +159,38 @@
       - macro_namespace: dbt_utils
         search_order: ['my_root_project', 'dbt_utils']
     @end
+
+** Query Comments
+   Allows you to inject a string as a comment in each query that runs in the 
+   data platform.
+
+   @table
+   Configuration | Definition
+   -
+   comment       | Optional. The string to be injected as a comment
+   -
+   append        | Optional, default=false. Whether comment is appended at the
+   bottom or placed at the top
+   -
+   job-label     | BigQuery only
+   @end
+
+   @code yaml
+   ---
+   query-comment:
+     comment: string
+     append: true | false
+     job-label: true | false # BigQuery only!
+   @end
+
+   By default, DBT will inject a JSON comment to all queries, containing:
+   - dbt version
+   - profile name
+   - target name
+   - node id
+
+   @code sql
+   /* {"app": "dbt", "dbt_version": "0.15.0rc2", "profile_name": "debug",
+   "target_name": "dev", "node_id": "model.dbt2.my_model"} */
+   ...
+   @end
