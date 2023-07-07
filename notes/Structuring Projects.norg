@@ -70,7 +70,7 @@
    the main `production` schema as they're not intended for consumption in 
    dashboards or applications.
    They should also be *materialized ephemerally* (preferred option). If needed,
-   they can also be materiazlied as *views* inside a custom schema with special
+   they can also be materialized as *views* inside a custom schema with special
    permissions, outside of the `production` schema.
 
 *** Common Use Cases for Intermediate Models
