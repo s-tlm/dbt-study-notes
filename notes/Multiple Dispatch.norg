@@ -1,5 +1,7 @@
 * How DBT Handles Multiple Dispatch
-  DBT uses multiple dispatch to correctly execute code based on the data
+  As DBT supports several data platforms, it needs to ensure the correct
+  implementation of the code is sent to the data platform upon execution.
+  DBT uses multiple dispatch to execute code correctly based on the data
   platform adapter used.
 
   The following are used to select the correct implementation:
@@ -7,8 +9,8 @@
   ~ Package namespace
 
 ** Adapter Prefix
-   The following adapters are supported. If no match, DBT defaults to the /default/
-   implementation.
+   The following adapters are supported. If no match, DBT defaults to the 
+   /default/ implementation.
 
    - Postgres: `postgres__my_macro`
    - Redshift: `redshift__my_macro`
